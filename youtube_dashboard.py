@@ -333,7 +333,7 @@ def main():
     parser.add_argument("--preview", action="store_true", help="Open in browser")
     args = parser.parse_args()
 
-    if not os.environ.get("YOUTUBE_API_KEY"):
+    if not os.environ.get("YOUTUBE_API_KEY_2"):
         logger.error("YOUTUBE_API_KEY required. Get one at https://console.cloud.google.com")
         sys.exit(1)
 
