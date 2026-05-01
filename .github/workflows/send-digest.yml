@@ -1,7 +1,10 @@
 name: Send Email Digest
 
 on:
-  workflow_dispatch: # Manual trigger only — click "Run workflow" in GitHub UI
+  schedule:
+    # 7:00 AM Pacific (14:00 UTC) every day
+    - cron: '0 14 * * *'
+  workflow_dispatch: # Also allow manual trigger
 
 jobs:
   send:

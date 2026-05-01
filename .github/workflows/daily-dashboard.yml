@@ -46,18 +46,6 @@ jobs:
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'openai' }}
         run: python youtube_dashboard.py
 
-      - name: Generate email digest (no send)
-        env:
-          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'openai' }}
-        run: python digest.py
-
       - name: Prepare Pages site
         run: |
           mkdir -p _site
