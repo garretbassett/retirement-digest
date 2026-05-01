@@ -293,7 +293,7 @@ def gather_youtube_trends() -> dict:
     Main entry point: fetch videos and analyze them.
     Returns dict with 'trend_summary' and 'videos'.
     """
-    api_key = os.environ.get("YOUTUBE_API_KEY", "")
+    api_key = os.environ.get("YOUTUBE_API_KEY_2", "")
     if not api_key:
         logger.warning(
             "YOUTUBE_API_KEY not set — skipping YouTube trends. "
@@ -432,7 +432,7 @@ def fetch_competitor_videos(api_key: str) -> list[dict]:
 
 def gather_competitor_videos() -> list[dict]:
     """Fetch, tag, and return competitor channel videos."""
-    api_key = os.environ.get("YOUTUBE_API_KEY", "")
+    api_key = os.environ.get("YOUTUBE_API_KEY_2", "")
     if not api_key:
         return []
     videos = fetch_competitor_videos(api_key)
