@@ -2,8 +2,8 @@ name: Daily YouTube Dashboard
 
 on:
   schedule:
-    # 12:01 AM Pacific (8:01 UTC) — right after YouTube API quota resets
-    - cron: '1 8 * * *'
+    # 12:01 AM Pacific (8:01 UTC) on Tuesday and Saturday
+    - cron: '1 8 * * 2,6'
   workflow_dispatch: # Allow manual trigger from GitHub UI
 
 permissions:
