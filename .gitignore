@@ -1,0 +1,17 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Output (generated files — dashboard HTML goes to gh-pages branch)
+output/
+
+# IDE
+.vscode/
+.idea/

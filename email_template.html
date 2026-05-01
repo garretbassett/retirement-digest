@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ subject }}</title>
+</head>
+<body style="margin: 0; padding: 0; width: 100%; font-family: Georgia, 'Times New Roman', serif; background-color: #f5f0eb; color: #2c2c2c; line-height: 1.7; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;">
+    <div style="max-width: 832px; margin: 0 auto; background-color: #ffffff;">
+
+        <!-- Header -->
+        <div style="background-color: #1a5276; color: #ffffff; padding: 32px 28px; text-align: center;">
+            <h1 style="margin: 0 0 8px 0; font-size: 28px; font-weight: normal; letter-spacing: 0.5px; color: #ffffff;">🌅 Retirement Daily Digest</h1>
+            <div style="font-size: 15px; color: #d6e9f5;">{{ date_display }}</div>
+        </div>
+
+        <!-- Daily Overview -->
+        <div style="padding: 28px; background-color: #faf8f5; border-bottom: 2px solid #e8e0d8;">
+            <h2 style="font-size: 20px; color: #1a5276; margin: 0 0 14px 0; font-weight: normal;">☕ Today at a Glance</h2>
+            {% for paragraph in overview_paragraphs %}
+            <p style="font-size: 16px; margin: 0 0 12px 0; color: #2c2c2c;">{{ paragraph }}</p>
+            {% endfor %}
+        </div>
+
+        <!-- Topic Sections -->
+        {% for topic_key, articles in topics.items() %}
+        {% if articles %}
+        <div style="padding: 24px 28px; border-bottom: 1px solid #e8e0d8;">
+            <h2 style="font-size: 20px; color: #1a5276; margin: 0 0 18px 0; padding-bottom: 8px; border-bottom: 2px solid #2e86c1; font-weight: normal;">{{ topic_names[topic_key] }}</h2>
+            {% for article in articles %}
+            <div style="margin-bottom: 20px; padding-bottom: 18px;{% if not loop.last %} border-bottom: 1px dotted #d5cec6;{% endif %}">
+                <p style="font-size: 17px; font-weight: bold; margin: 0 0 4px 0;">
+                    <a href="{{ article.url }}" target="_blank" style="color: #1a5276; text-decoration: none;">{{ article.title }}</a>
+                </p>
+                <p style="font-size: 13px; color: #777777; margin: 0 0 8px 0;">{{ article.source }}{% if article.published_at %} · {{ article.published_at[:10] }}{% endif %}</p>
+                <p style="font-size: 15px; margin: 0; color: #444444;">{{ article.summary }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endfor %}
+
+        <!-- YouTube Trends — What's Already on YouTube -->
+        {% if yt_trends and yt_trends.videos %}
+        <div style="padding: 28px; background-color: #f0f4f8; border-bottom: 2px solid #e8e0d8;">
+            <h2 style="font-size: 20px; color: #1a5276; margin: 0 0 14px 0; font-weight: normal;">📺 What's Trending on YouTube This Week</h2>
+            {% if yt_trends.trend_summary %}
+            {% for paragraph in yt_trends.trend_summary.split('\n\n') %}
+            {% if paragraph.strip() %}
+            <p style="font-size: 15px; margin: 0 0 12px 0; color: #444444;">{{ paragraph.strip() }}</p>
+            {% endif %}
+            {% endfor %}
+            {% endif %}
+            <div style="margin-top: 20px;">
+            {% for video in yt_trends.videos %}
+            <div style="margin-bottom: 18px; padding-bottom: 16px;{% if not loop.last %} border-bottom: 1px dotted #d5cec6;{% endif %}">
+                <p style="font-size: 16px; font-weight: bold; margin: 0 0 4px 0;">
+                    <a href="{{ video.url }}" target="_blank" style="color: #1a5276; text-decoration: none;">{{ video.title }}</a>
+                </p>
+                <p style="font-size: 13px; color: #777777; margin: 0 0 6px 0;">{{ video.channel }} · {{ "{:,}".format(video.view_count) }} views · {{ video.published_at[:10] }}</p>
+                {% if video.summary %}
+                <p style="font-size: 14px; margin: 0 0 4px 0; color: #444444;">{{ video.summary }}</p>
+                {% endif %}
+                {% if video.why_performing %}
+                <p style="font-size: 13px; margin: 0; color: #888888; font-style: italic;">💡 {{ video.why_performing }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- YouTube Content Ideas -->
+        {% if youtube_ideas %}
+        <div style="padding: 28px; background-color: #fdf6f0; border-bottom: 2px solid #e8e0d8;">
+            <h2 style="font-size: 20px; color: #c0392b; margin: 0 0 18px 0; font-weight: normal;">🎬 YouTube Content Ideas</h2>
+            {% for idea in youtube_ideas %}
+            <div style="margin-bottom: 22px; padding: 16px; background-color: #ffffff; border-left: 4px solid #c0392b; border-radius: 0 6px 6px 0;">
+                <h3 style="font-size: 16px; color: #c0392b; margin: 0 0 8px 0;">{{ idea.title }}</h3>
+                <p style="font-style: italic; font-size: 14px; color: #555555; margin: 0 0 10px 0;">"{{ idea.hook }}"</p>
+                <ul style="margin: 0 0 8px 0; padding-left: 20px; font-size: 14px;">
+                    {% for point in idea.outline %}
+                    <li style="margin-bottom: 4px;">{{ point }}</li>
+                    {% endfor %}
+                </ul>
+                <p style="font-size: 13px; color: #888888; margin: 0;">📈 {{ idea.why }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Footer -->
+        <div style="padding: 24px 28px; text-align: center; font-size: 13px; color: #999999; background-color: #f5f0eb;">
+            <p style="margin: 0 0 8px 0;">You're receiving this because you're awesome and care about your future. 💛</p>
+            <p style="margin: 0;">Generated on {{ date_display }} · Powered by AI-assisted curation</p>
+        </div>
+    </div>
+</body>
+</html>
