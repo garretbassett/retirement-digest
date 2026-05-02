@@ -10,7 +10,7 @@ __pycache__/
 .DS_Store
 
 # Output (generated files — dashboard HTML goes to gh-pages branch)
-output/
+output/*
 !output/dashboard.html
 
 # IDE
