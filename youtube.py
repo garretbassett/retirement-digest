@@ -296,7 +296,7 @@ def gather_youtube_trends() -> dict:
     api_key = os.environ.get("YOUTUBE_API_KEY_2", "")
     if not api_key:
         logger.warning(
-            "YOUTUBE_API_KEY not set — skipping YouTube trends. "
+            "YOUTUBE_API_KEY_2 not set — skipping YouTube trends. "
             "Get a free key at https://console.cloud.google.com"
         )
         return {"trend_summary": "", "videos": []}
