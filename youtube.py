@@ -22,6 +22,7 @@ from config import (
 logger = logging.getLogger(__name__)
 
 YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
+YOUTUBE_CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
 
 
 def _parse_duration(iso_duration: str) -> int:
@@ -140,6 +141,7 @@ def fetch_youtube_videos(api_key: str) -> list[dict]:
                             "description": snippet.get("description", "")[:300],
                             "published_at": snippet.get("publishedAt", ""),
                             "url": f"https://www.youtube.com/watch?v={vid_id}",
+                            "thumbnail_url": f"https://i.ytimg.com/vi/{vid_id}/mqdefault.jpg",
                             "view_count": view_count,
                             "like_count": int(stats.get("likeCount", 0)),
                             "comment_count": int(stats.get("commentCount", 0)),
@@ -204,13 +206,12 @@ def analyze_youtube_trends(videos: list[dict]) -> dict:
 - "angle": one of: Educational, News Reaction, Personal Story, Fear/Urgency, Empowering, Listicle, How-To, Interview, Myth-Busting, Comparison, Other
 - "content_type": one of: Explainer, Tutorial, Commentary, Vlog, Case Study, Q&A, Compilation, Motivational, Other
 - "jtbd": an array of one or more labels from this list:
-  - "Emotional Stabilization" — reduces stress/fear/uncertainty about money, reassures the viewer
-  - "Explain Concept" — turns complex financial systems into clear, usable frameworks
-  - "Social Calibration" — helps viewer understand where they stand relative to others (savings, income, lifestyle)
-  - "Decision Outsourcing" — gives clear recommendations so viewer doesn't have to evaluate everything
-  - "Identity & Community" — helps viewer adopt a financial worldview or feel part of a group
-  - "Incite Fear" — uses fear, urgency, or alarm as the primary hook, frames situation as crisis
-  - "Other" — doesn't fit the above
+  - "Make Me Feel Better" — reduces stress/fear/uncertainty about money, reassures the viewer
+  - "Explain a Concept" — turns complex financial systems into clear, usable frameworks
+  - "Tell Me Where I'm At" — helps viewer understand where they stand relative to others (savings, income, lifestyle)
+  - "Make a Decision For Me" — gives clear recommendations so viewer doesn't have to evaluate everything
+  - "Help Me Feel Part of Something" — helps viewer adopt a financial worldview or feel part of a group
+  - "Make Me Feel Worse" — uses fear, urgency, or alarm as the primary hook, frames situation as crisis
 
 Tag based on what the title and description PROMISE to the viewer. A video can have multiple JTBD tags.
 
@@ -238,7 +239,7 @@ Return a JSON object with a "videos" key containing the array. Return ONLY valid
                     batch[idx]["topic"] = item.get("topic", "Other")
                     batch[idx]["angle"] = item.get("angle", "Other")
                     batch[idx]["content_type"] = item.get("content_type", "Other")
-                    batch[idx]["jtbd"] = item.get("jtbd", ["Other"])
+                    batch[idx]["jtbd"] = item.get("jtbd", [])
 
         except Exception as e:
             logger.error("Video tagging failed for batch %d: %s", batch_start, e)
@@ -250,7 +251,7 @@ Return a JSON object with a "videos" key containing the array. Return ONLY valid
         v.setdefault("topic", "Other")
         v.setdefault("angle", "Other")
         v.setdefault("content_type", "Other")
-        v.setdefault("jtbd", ["Other"])
+        v.setdefault("jtbd", [])
 
     # --- Generate trend summary from top 20 ---
     top_list = ""
@@ -409,6 +410,7 @@ def fetch_competitor_videos(api_key: str) -> list[dict]:
                         "description": snippet.get("description", "")[:300],
                         "published_at": pub_str,
                         "url": f"https://www.youtube.com/watch?v={vid_id}",
+                        "thumbnail_url": f"https://i.ytimg.com/vi/{vid_id}/mqdefault.jpg",
                         "view_count": int(stats.get("viewCount", 0)),
                         "like_count": int(stats.get("likeCount", 0)),
                         "comment_count": int(stats.get("commentCount", 0)),
@@ -430,12 +432,46 @@ def fetch_competitor_videos(api_key: str) -> list[dict]:
     return all_videos
 
 
+def fetch_channel_avatars(api_key: str, channel_ids: list[str]) -> dict[str, str]:
+    """Fetch channel avatar URLs for a list of channel IDs.
+    Returns dict of channel_id -> avatar_url."""
+    avatars = {}
+    for batch_start in range(0, len(channel_ids), 50):
+        batch = channel_ids[batch_start : batch_start + 50]
+        try:
+            resp = requests.get(
+                YOUTUBE_CHANNELS_URL,
+                params={"part": "snippet", "id": ",".join(batch), "key": api_key},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            for item in resp.json().get("items", []):
+                thumbnails = item.get("snippet", {}).get("thumbnails", {})
+                url = (
+                    thumbnails.get("medium")
+                    or thumbnails.get("default")
+                    or {}
+                ).get("url", "")
+                if url:
+                    avatars[item["id"]] = url
+        except requests.RequestException as e:
+            logger.warning("Channel avatar fetch failed: %s", e)
+    return avatars
+
+
 def gather_competitor_videos() -> list[dict]:
     """Fetch, tag, and return competitor channel videos."""
     api_key = os.environ.get("YOUTUBE_API_KEY_2", "")
     if not api_key:
         return []
     videos = fetch_competitor_videos(api_key)
+
+    # Fetch channel avatars and attach to each video
+    avatar_by_id = fetch_channel_avatars(api_key, list(COMPETITOR_CHANNELS.values()))
+    id_to_name = {v: k for k, v in COMPETITOR_CHANNELS.items()}
+    avatar_by_name = {id_to_name[cid]: url for cid, url in avatar_by_id.items() if cid in id_to_name}
+    for v in videos:
+        v["channel_avatar"] = avatar_by_name.get(v["channel"], "")
 
     # AI-tag competitor videos with JTBD and topic
     cfg = get_llm_config()
@@ -458,7 +494,7 @@ def gather_competitor_videos() -> list[dict]:
         prompt = f"""Tag these YouTube videos. For each, provide:
 - "index": video number (1-based)
 - "topic": one of: Social Security, Medicare, Investing, Retirement Planning, Tax Strategy, Budgeting, Health & Wellness, Lifestyle, Career, Real Estate, Insurance, General Finance, Other
-- "jtbd": array of one or more: "Emotional Stabilization", "Explain Concept", "Social Calibration", "Decision Outsourcing", "Identity & Community", "Incite Fear", "Other"
+- "jtbd": array of one or more: "Make Me Feel Better", "Explain a Concept", "Tell Me Where I'm At", "Make a Decision For Me", "Help Me Feel Part of Something", "Make Me Feel Worse"
 - "summary": 1 sentence summary
 
 Videos:
@@ -478,14 +514,14 @@ Return JSON with "videos" array. ONLY valid JSON."""
                 idx = item.get("index", 0) - 1
                 if 0 <= idx < len(batch):
                     batch[idx]["topic"] = item.get("topic", "Other")
-                    batch[idx]["jtbd"] = item.get("jtbd", ["Other"])
+                    batch[idx]["jtbd"] = item.get("jtbd", [])
                     batch[idx]["summary"] = item.get("summary", "")
         except Exception as e:
             logger.error("Competitor tagging failed for batch %d: %s", batch_start, e)
 
     for v in videos:
         v.setdefault("topic", "Other")
-        v.setdefault("jtbd", ["Other"])
+        v.setdefault("jtbd", [])
         v.setdefault("summary", "")
 
     return videos

@@ -7,7 +7,7 @@ on:
   workflow_dispatch: # Allow manual trigger from GitHub UI
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -48,6 +48,15 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'openai' }}
         run: python youtube_dashboard.py
+
+      - name: Commit dashboard HTML
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p output
+          git add output/dashboard.html
+          git diff --cached --quiet || git commit -m "chore: update dashboard.html [skip ci]"
+          git push
 
       - name: Prepare Pages site
         run: |

@@ -8,6 +8,7 @@ YouTube Trends Dashboard Generator — static HTML with two tabs:
 import argparse
 import json
 import logging
+import markdown as md_lib
 import os
 import sys
 import webbrowser
@@ -43,8 +44,7 @@ def generate_dashboard(
     videos = yt_data.get("videos", [])
     trend_summary = yt_data.get("trend_summary", "")
 
-    trend_paragraphs = [p.strip() for p in trend_summary.split("\n\n") if p.strip()]
-    trend_html = "\n".join(f"<p>{p}</p>" for p in trend_paragraphs)
+    trend_html = md_lib.markdown(trend_summary) if trend_summary else ""
 
     # Collect filter options from tagged data
     topics = sorted(set(v.get("topic", "Other") for v in videos))
@@ -52,13 +52,12 @@ def generate_dashboard(
     content_types = sorted(set(v.get("content_type", "Other") for v in videos))
     languages = sorted(set(v.get("language", "unknown") for v in videos))
     all_jtbd = [
-        "Emotional Stabilization",
-        "Explain Concept",
-        "Social Calibration",
-        "Decision Outsourcing",
-        "Identity & Community",
-        "Incite Fear",
-        "Other",
+        "Make Me Feel Better",
+        "Make Me Feel Worse",
+        "Explain a Concept",
+        "Tell Me Where I'm At",
+        "Make a Decision For Me",
+        "Help Me Feel Part of Something",
     ]
 
     def make_options(items):
@@ -117,6 +116,7 @@ def generate_dashboard(
         /* Video row */
         .vrow {{ background: #fff; border: 1px solid #e1e4e8; border-radius: 8px; padding: 14px 18px; margin-bottom: 8px; display: flex; gap: 12px; align-items: flex-start; }}
         .vrow:hover {{ border-color: #2e86c1; }}
+        .vthumb {{ width: 120px; height: 68px; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: #eee; }}
         .vrank {{ font-size: 13px; font-weight: 700; color: #bbb; min-width: 28px; padding-top: 2px; }}
         .vcontent {{ flex: 1; }}
         .vcontent a {{ font-size: 14px; font-weight: 600; color: #1a5276; text-decoration: none; }}
@@ -143,7 +143,6 @@ def generate_dashboard(
     <div class="header">
         <div style="max-width: 1100px; margin: 0 auto;">
             <h1>📺 Retirement Content Trends</h1>
-            <div class="sub">What's getting traction · {date_display}</div>
         </div>
     </div>
 
@@ -217,8 +216,10 @@ def generate_dashboard(
         if (v.language && v.language!=='unknown') tags += '<span class="tag tag-lang">'+v.language.toUpperCase()+'</span>';
         if (v.jtbd && v.jtbd.length) v.jtbd.forEach(function(j){{ tags += '<span class="tag tag-jtbd">'+j+'</span>'; }});
 
+        var thumbUrl = v.thumbnail_url || ('https://i.ytimg.com/vi/'+v.video_id+'/mqdefault.jpg');
         var html = '<div class="vrow">';
         html += '<div class="vrank">#'+(i+1)+'</div>';
+        html += '<img class="vthumb" src="'+thumbUrl+'" alt="" loading="lazy">';
         html += '<div class="vcontent">';
         html += '<a href="'+v.url+'" target="_blank">'+v.title+'</a>';
         html += '<div class="vmeta"><span class="ch">'+v.channel+'</span> · '+fmt(v.view_count)+' views · '+ago(v.published_at)+'</div>';
@@ -275,35 +276,83 @@ def generate_dashboard(
     }}
 
     function renderChannelSummary() {{
-        // Build per-channel stats
         var channels = {{}};
         compVideos.forEach(function(v) {{
-            if (!channels[v.channel]) channels[v.channel] = {{ week: 0, month: 0, total: 0, views: 0, topics: {{}}, jtbds: {{}} }};
+            if (!channels[v.channel]) channels[v.channel] = {{ week: 0, month: 0, total: 0, views: 0, topics: {{}}, jtbds: {{}}, weekVideos: [], monthVideos: [], channel_avatar: v.channel_avatar || '' }};
             var c = channels[v.channel];
             c.total++;
             c.views += v.view_count;
-            if (v.period === 'week') c.week++; else c.month++;
+            if (v.period === 'week') {{ c.week++; c.weekVideos.push(v); }} else {{ c.month++; c.monthVideos.push(v); }}
             if (v.topic) c.topics[v.topic] = (c.topics[v.topic] || 0) + 1;
             if (v.jtbd) v.jtbd.forEach(function(j) {{ c.jtbds[j] = (c.jtbds[j] || 0) + 1; }});
         }});
 
         var sorted = Object.keys(channels).sort(function(a,b) {{ return channels[b].views - channels[a].views; }});
-        var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;">';
-        sorted.forEach(function(name) {{
+        var html = '<div id="ch-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;">';
+        sorted.forEach(function(name, idx) {{
             var c = channels[name];
             var topTopics = Object.entries(c.topics).sort(function(a,b){{return b[1]-a[1];}}).slice(0,3).map(function(e){{return e[0];}});
             var topJtbd = Object.entries(c.jtbds).sort(function(a,b){{return b[1]-a[1];}}).slice(0,3).map(function(e){{return e[0];}});
-            html += '<div style="background:#fff;border:1px solid #e1e4e8;border-radius:8px;padding:14px;">';
-            html += '<div style="font-weight:600;font-size:14px;color:#1a5276;margin-bottom:6px;">'+name+'</div>';
+
+            var displayVideos = c.weekVideos.length > 0 ? c.weekVideos : c.monthVideos;
+            var periodLabel = c.weekVideos.length > 0 ? 'this week' : 'this month';
+
+            var videosHtml = '';
+            displayVideos.slice().sort(function(a,b){{ return b.view_count - a.view_count; }}).forEach(function(v) {{
+                var fmtTag = v.is_short ? '<span class="tag tag-short">SHORT</span>' : (v.format==='Livestream' ? '<span class="tag tag-live">LIVE</span>' : '<span class="tag tag-long">'+dur(v.duration_seconds)+'</span>');
+                var vThumb = v.thumbnail_url || ('https://i.ytimg.com/vi/'+v.video_id+'/mqdefault.jpg');
+                videosHtml += '<div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid #f0f0f0;">';
+                videosHtml += '<a href="'+v.url+'" target="_blank" style="flex-shrink:0;"><img src="'+vThumb+'" style="width:100px;height:56px;object-fit:cover;border-radius:3px;" loading="lazy"></a>';
+                videosHtml += '<div style="flex:1;min-width:0;">';
+                videosHtml += '<a href="'+v.url+'" target="_blank" style="font-size:13px;font-weight:600;color:#1a5276;text-decoration:none;">'+v.title+'</a>';
+                videosHtml += '<div style="font-size:11px;color:#888;margin-top:2px;">'+fmt(v.view_count)+' views · '+fmt(v.like_count||0)+' likes · '+ago(v.published_at)+' · '+fmtTag+'</div>';
+                if (v.summary) videosHtml += '<div style="font-size:12px;color:#666;margin-top:2px;font-style:italic;">'+v.summary+'</div>';
+                videosHtml += '</div></div>';
+            }});
+
+            var avatarHtml = c.channel_avatar ? '<img src="'+c.channel_avatar+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;" loading="lazy">' : '';
+            html += '<div id="card-'+idx+'" style="background:#fff;border:1px solid #e1e4e8;border-radius:8px;padding:14px;cursor:pointer;" onclick="toggleChannel(\'ch-'+idx+'\')">';
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+            html += '<div style="display:flex;align-items:center;gap:10px;">'+avatarHtml+'<div style="font-weight:600;font-size:14px;color:#1a5276;">'+name+'</div></div>';
+            html += '<span id="ch-arrow-'+idx+'" data-period="'+periodLabel+'" style="font-size:11px;color:#999;">&#9660; '+periodLabel+'</span>';
+            html += '</div>';  // end header row
             html += '<div style="font-size:12px;color:#666;">';
             html += '<span style="font-weight:600;">'+c.week+'</span> this week · <span style="font-weight:600;">'+c.total+'</span> this month · '+fmt(c.views)+' total views';
             html += '</div>';
             if (topTopics.length) html += '<div style="margin-top:6px;">'+topTopics.map(function(t){{return '<span class="tag tag-topic">'+t+'</span>';}}).join('')+'</div>';
             if (topJtbd.length) html += '<div style="margin-top:4px;">'+topJtbd.map(function(j){{return '<span class="tag tag-jtbd">'+j+'</span>';}}).join('')+'</div>';
+            html += '<div id="ch-'+idx+'" style="display:none;margin-top:10px;">'+videosHtml+'</div>';
             html += '</div>';
         }});
         html += '</div>';
         document.getElementById('channel-summary').innerHTML = html;
+    }}
+
+    function toggleChannel(id) {{
+        var el = document.getElementById(id);
+        if (!el) return;
+        var idx = id.replace('ch-', '');
+        var arrow = document.getElementById('ch-arrow-'+idx);
+        var card = document.getElementById('card-'+idx);
+        var period = arrow ? arrow.dataset.period : '';
+        if (el.style.display === 'none') {{
+            el.style.display = 'block';
+            if (arrow) arrow.innerHTML = '&#9650; ' + period;
+            if (card) {{
+                card._origNext = card.nextSibling;
+                card.style.gridColumn = '1 / -1';
+                var grid = document.getElementById('ch-grid');
+                if (grid) grid.insertBefore(card, grid.firstChild);
+            }}
+        }} else {{
+            el.style.display = 'none';
+            if (arrow) arrow.innerHTML = '&#9660; ' + period;
+            if (card) {{
+                card.style.gridColumn = '';
+                var grid = document.getElementById('ch-grid');
+                if (grid) grid.insertBefore(card, card._origNext || null);
+            }}
+        }}
     }}
 
     function switchTab(name) {{
