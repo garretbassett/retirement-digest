@@ -12,6 +12,10 @@ __pycache__/
 # Output (generated files — dashboard HTML goes to gh-pages branch)
 output/*
 !output/dashboard.html
+!output/digest-*.json
+!output/data/
+output/data/*
+!output/data/latest.json
 
 # IDE
 .vscode/

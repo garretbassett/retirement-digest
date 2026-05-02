@@ -49,13 +49,13 @@ jobs:
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'openai' }}
         run: python youtube_dashboard.py
 
-      - name: Commit dashboard HTML
+      - name: Commit dashboard outputs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          mkdir -p output
-          git add output/dashboard.html
-          git diff --cached --quiet || git commit -m "chore: update dashboard.html [skip ci]"
+          mkdir -p output/data
+          git add output/dashboard.html output/data/latest.json
+          git diff --cached --quiet || git commit -m "chore: update dashboard outputs [skip ci]"
           git push
 
       - name: Prepare Pages site

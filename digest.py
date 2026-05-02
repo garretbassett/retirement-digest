@@ -12,6 +12,7 @@ Usage:
 """
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -145,6 +146,33 @@ def main():
     output_file = output_dir / f"digest-{date_str}.html"
     output_file.write_text(html, encoding="utf-8")
     logger.info("💾 Saved to %s", output_file)
+
+    # Save structured JSON for the dashboard news tab
+    digest_data = {
+        "date": date_str,
+        "date_display": date_display,
+        "overview": overview,
+        "topics": {
+            key: {
+                "name": topic_names[key],
+                "articles": [
+                    {
+                        "title": a.get("title", ""),
+                        "source": a.get("source", ""),
+                        "url": a.get("url", ""),
+                        "summary": a.get("summary", a.get("description", "")),
+                    }
+                    for a in articles
+                ],
+            }
+            for key, articles in trimmed_articles.items()
+            if articles
+        },
+        "youtube_ideas": youtube_ideas,
+    }
+    json_file = output_dir / f"digest-{date_str}.json"
+    json_file.write_text(json.dumps(digest_data, indent=2, ensure_ascii=False), encoding="utf-8")
+    logger.info("💾 Digest JSON saved to %s", json_file)
 
     # ------------------------------------------------------------------
     # Step 6: Send or preview

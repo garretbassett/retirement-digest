@@ -39,12 +39,17 @@ def format_number(n: int) -> str:
 
 
 def generate_dashboard(
-    yt_data: dict, competitor_videos: list, date_display: str
+    yt_data: dict, competitor_videos: list, date_display: str, digests: dict = None
 ) -> str:
     videos = yt_data.get("videos", [])
     trend_summary = yt_data.get("trend_summary", "")
 
     trend_html = md_lib.markdown(trend_summary) if trend_summary else ""
+
+    digests = digests or {}
+    digest_dates = sorted(digests.keys(), reverse=True)
+    digests_json = json.dumps(digests, default=str)
+    digest_dates_json = json.dumps(digest_dates)
 
     # Collect filter options from tagged data
     topics = sorted(set(v.get("topic", "Other") for v in videos))
@@ -149,8 +154,15 @@ def generate_dashboard(
     <div class="container">
         <!-- Tabs -->
         <div class="tabs">
-            <div class="tab active" onclick="switchTab('trending')">Trending Videos</div>
-            <div class="tab" onclick="switchTab('competitors')">Competitor Watch</div>
+            <div class="tab active" data-tab="news" onclick="switchTab('news')">📰 News</div>
+            <div class="tab" data-tab="trending" onclick="switchTab('trending')">Trending Videos</div>
+            <div class="tab" data-tab="competitors" onclick="switchTab('competitors')">Competitor Watch</div>
+        </div>
+
+        <!-- TAB 0: News -->
+        <div id="tab-news" class="tab-content active">
+            {f'<div class="filters" style="align-items:center;"><span style="font-size:13px;font-weight:600;color:#333;">Date:</span><select id="digest-date-select" onchange="renderNews(this.value)" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">{"".join(f\'<option value="{d}">{d}</option>\' for d in digest_dates)}</select></div>' if digest_dates else '<div class="card"><p style="color:#999;">No digests available yet. They\'ll appear here after the daily email job runs.</p></div>'}
+            <div id="news-content"></div>
         </div>
 
         <!-- TAB 1: Trending -->
@@ -202,6 +214,8 @@ def generate_dashboard(
     <script>
     const videos = {videos_json};
     const compVideos = {comp_json};
+    const digests = {digests_json};
+    const digestDates = {digest_dates_json};
 
     function fmt(n) {{ if (n>=1e6) return (n/1e6).toFixed(1)+'M'; if (n>=1e3) return (n/1e3).toFixed(1)+'K'; return n.toString(); }}
     function dur(s) {{ if (!s||s<=0) return ''; var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60; if(h>0) return h+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'); return m+':'+String(sec).padStart(2,'0'); }}
@@ -355,60 +369,141 @@ def generate_dashboard(
         }}
     }}
 
+    function renderNews(date) {{
+        var digest = digests[date];
+        var el = document.getElementById('news-content');
+        if (!digest) {{ el.innerHTML = '<p style="color:#999;padding:20px;">No digest available.</p>'; return; }}
+        var html = '';
+
+        // Overview
+        html += '<div class="card"><h2>📰 Overview</h2>';
+        var paras = digest.overview ? digest.overview.split('\n\n') : [];
+        paras.forEach(function(p) {{ if (p.trim()) html += '<p>'+p.trim()+'</p>'; }});
+        html += '</div>';
+
+        // YouTube Ideas
+        if (digest.youtube_ideas && digest.youtube_ideas.length) {{
+            html += '<div class="card"><h2>🎬 Video Ideas From Today\'s News</h2>';
+            digest.youtube_ideas.forEach(function(idea, i) {{
+                html += '<div style="'+(i>0?'padding-top:16px;border-top:1px solid #f0f0f0;margin-top:4px;':'')+'">';
+                html += '<div style="font-weight:600;font-size:14px;color:#1a5276;margin-bottom:4px;">'+idea.title+'</div>';
+                if (idea.hook) html += '<div style="font-size:13px;color:#555;margin-bottom:6px;"><strong>Hook:</strong> '+idea.hook+'</div>';
+                if (idea.outline && idea.outline.length) {{
+                    html += '<ul style="font-size:13px;color:#555;margin:0 0 6px 20px;">';
+                    idea.outline.forEach(function(pt) {{ html += '<li>'+pt+'</li>'; }});
+                    html += '</ul>';
+                }}
+                if (idea.why) html += '<div style="font-size:12px;color:#999;font-style:italic;">'+idea.why+'</div>';
+                html += '</div>';
+            }});
+            html += '</div>';
+        }}
+
+        // Articles by topic
+        var topics = digest.topics || {{}};
+        Object.keys(topics).forEach(function(key) {{
+            var topic = topics[key];
+            if (!topic.articles || !topic.articles.length) return;
+            html += '<div class="card"><h2>'+topic.name+'</h2>';
+            topic.articles.forEach(function(article, i) {{
+                html += '<div style="'+(i>0?'padding-top:12px;border-top:1px solid #f0f0f0;margin-top:12px;':'')+'">';
+                html += '<a href="'+article.url+'" target="_blank" style="font-size:14px;font-weight:600;color:#1a5276;text-decoration:none;">'+article.title+'</a>';
+                html += '<div style="font-size:11px;color:#999;margin-top:2px;">'+article.source+'</div>';
+                if (article.summary) html += '<div style="font-size:13px;color:#555;margin-top:4px;">'+article.summary+'</div>';
+                html += '</div>';
+            }});
+            html += '</div>';
+        }});
+
+        el.innerHTML = html || '<p style="color:#999;padding:20px;">No content for this date.</p>';
+    }}
+
     function switchTab(name) {{
         document.querySelectorAll('.tab').forEach(function(t){{ t.classList.remove('active'); }});
         document.querySelectorAll('.tab-content').forEach(function(t){{ t.classList.remove('active'); }});
-        if (name==='trending') {{
-            document.querySelectorAll('.tab')[0].classList.add('active');
-            document.getElementById('tab-trending').classList.add('active');
-        }} else {{
-            document.querySelectorAll('.tab')[1].classList.add('active');
-            document.getElementById('tab-competitors').classList.add('active');
-        }}
+        document.querySelector('.tab[data-tab="'+name+'"]').classList.add('active');
+        document.getElementById('tab-'+name).classList.add('active');
     }}
 
     // Initial render
     applyFilters();
     applyCompFilters();
     renderChannelSummary();
+    if (digestDates.length > 0) renderNews(digestDates[0]);
     </script>
 </body>
 </html>"""
     return html
 
 
+def load_digests(output_dir: Path) -> dict:
+    """Load up to 30 days of digest JSONs from the output directory."""
+    digests = {}
+    for f in sorted(output_dir.glob("digest-*.json"), reverse=True)[:30]:
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+            if "date" in d:
+                digests[d["date"]] = d
+        except Exception:
+            pass
+    logger.info("📰 Loaded %d digest(s)", len(digests))
+    return digests
+
+
 def main():
     parser = argparse.ArgumentParser(description="YouTube Trends Dashboard")
     parser.add_argument("--preview", action="store_true", help="Open in browser")
+    parser.add_argument("--from-snapshot", action="store_true", help="Rebuild from latest snapshot without API calls")
     args = parser.parse_args()
-
-    if not os.environ.get("YOUTUBE_API_KEY_2"):
-        logger.error("YOUTUBE_API_KEY_2 required. Get one at https://console.cloud.google.com")
-        sys.exit(1)
 
     today = datetime.now(timezone.utc)
     date_str = today.strftime("%Y-%m-%d")
     date_display = today.strftime("%A, %B %d, %Y")
 
-    logger.info("📺 Fetching trending videos...")
-    yt_data = gather_youtube_trends()
-
-    logger.info("👀 Fetching competitor videos...")
-    comp_videos = gather_competitor_videos()
-
-    logger.info("🎨 Generating dashboard...")
-    html = generate_dashboard(yt_data, comp_videos, date_display)
-
     output_dir = Path("output")
     output_dir.mkdir(exist_ok=True)
+    data_dir = output_dir / "data"
+
+    if args.from_snapshot:
+        latest_file = data_dir / "latest.json"
+        if latest_file.exists():
+            old = json.loads(latest_file.read_text(encoding="utf-8"))
+            yt_data = old.get("trends", {})
+            comp_videos = old.get("competitors", [])
+            logger.info("📂 Loaded from snapshot (%s)", old.get("generated_at", "unknown"))
+        else:
+            logger.warning("No snapshot found — generating dashboard with empty YouTube data")
+            yt_data = {"trend_summary": "", "videos": []}
+            comp_videos = []
+    else:
+        if not os.environ.get("YOUTUBE_API_KEY_2"):
+            logger.error("YOUTUBE_API_KEY_2 required. Get one at https://console.cloud.google.com")
+            sys.exit(1)
+
+        logger.info("📺 Fetching trending videos...")
+        yt_data = gather_youtube_trends()
+
+        logger.info("👀 Fetching competitor videos...")
+        comp_videos = gather_competitor_videos()
+
+    digests = load_digests(output_dir)
+
+    logger.info("🎨 Generating dashboard...")
+    html = generate_dashboard(yt_data, comp_videos, date_display, digests)
+
     dashboard_file = output_dir / "dashboard.html"
     dashboard_file.write_text(html, encoding="utf-8")
     logger.info("💾 Saved to %s", dashboard_file)
 
+    if args.from_snapshot:
+        if args.preview:
+            webbrowser.open(f"file://{dashboard_file.resolve()}")
+        logger.info("🎉 Done!")
+        return
+
     # --- Snapshot system ---
     # Always save a timestamped snapshot (never overwritten).
     # Also maintain a "latest" symlink-style file for convenience.
-    data_dir = output_dir / "data"
     data_dir.mkdir(exist_ok=True)
 
     now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%S")
@@ -446,7 +541,7 @@ def main():
                         "Rebuilding dashboard from last good snapshot (%s)",
                         old.get("generated_at", "unknown"),
                     )
-                    html = generate_dashboard(old_trends, old_comp, date_display)
+                    html = generate_dashboard(old_trends, old_comp, date_display, digests)
                     dashboard_file.write_text(html, encoding="utf-8")
             except (json.JSONDecodeError, KeyError):
                 pass

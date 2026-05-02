@@ -9,6 +9,15 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   send:
     runs-on: ubuntu-latest
@@ -35,3 +44,42 @@ jobs:
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'openai' }}
         run: python digest.py
+
+      - name: Rebuild dashboard with new digest
+        env:
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'openai' }}
+        run: python youtube_dashboard.py --from-snapshot
+
+      - name: Commit and push outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/dashboard.html output/digest-*.json
+          git diff --cached --quiet || git commit -m "chore: daily digest update [skip ci]"
+          git push
+
+  deploy:
+    needs: send
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Prepare Pages site
+        run: |
+          mkdir -p _site
+          cp output/dashboard.html _site/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
