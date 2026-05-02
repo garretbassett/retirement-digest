@@ -334,7 +334,7 @@ def main():
     args = parser.parse_args()
 
     if not os.environ.get("YOUTUBE_API_KEY_2"):
-        logger.error("YOUTUBE_API_KEY required. Get one at https://console.cloud.google.com")
+        logger.error("YOUTUBE_API_KEY_2 required. Get one at https://console.cloud.google.com")
         sys.exit(1)
 
     today = datetime.now(timezone.utc)
